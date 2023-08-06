@@ -45,7 +45,7 @@ spec:
   {{- end }}
   containers:
   - name: backup
-    image: ysyoo/redis-tool:0.3
+    image: ysyoo/redis-tool:0.4
     imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
     {{- if .Values.containerSecurityContext.enabled }}
     securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 4 }}
