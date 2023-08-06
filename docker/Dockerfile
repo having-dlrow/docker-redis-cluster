@@ -15,6 +15,12 @@ RUN apk add --no-cache bash curl unzip jq restic redis
 ENV KUBECTL_VERSION="latest"
 ENV REDIS_SHAKE_VERSION="2.0.1"
 
+# Install kubectl
+RUN curl -LO "https://dl.k8s.io/release/stable.txt" && \
+    curl -LO "https://dl.k8s.io/$(cat stable.txt)/bin/linux/amd64/kubectl" && \
+    chmod +x kubectl && \
+    mv kubectl /usr/local/bin/
+
 # Install RedisShake
 RUN curl -LO "https://github.com/alibaba/RedisShake/releases/download/release-${REDIS_SHAKE_VERSION}/redis-shake-linux-amd64" && \
     chmod +x redis-shake-linux-amd64 && \

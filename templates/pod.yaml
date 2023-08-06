@@ -45,7 +45,7 @@ spec:
   {{- end }}
   containers:
   - name: backup
-    image: ysyoo/redis-tool:0.4
+    image: ysyoo/redis-tool:0.5
     imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
     {{- if .Values.containerSecurityContext.enabled }}
     securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 4 }}
@@ -68,58 +68,26 @@ spec:
         ls -al /opt/bitnami
         . /opt/bitnami/scripts/libnet.sh
         . /opt/bitnami/scripts/libos.sh
-        # Backwards compatibility change
-        if ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then
-            cp /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf
-        fi
+ 
         firstNodeIP=$(wait_for_dns_lookup {{ template "common.names.fullname" . }}-0.{{ template "common.names.fullname" . }}-headless 120 5)
+        echo $firstNodeIp
+
+        # master nodes.
         {{- if .Values.cluster.externalAccess.enabled }}
         newNodeCounter=0
-        for nodeIP in $(echo "{{ .Values.cluster.update.newExternalIPs }}" | cut -d [ -f2 | cut -d ] -f 1 ); do
-          {{- if .Values.tls.enabled }}
-          while [[ $(redis-cli -h "$nodeIP" -p "$REDIS_TLS_PORT" --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} ping) != 'PONG' ]]; do
-          {{- else }}
-          while [[ $(redis-cli -h "$nodeIP" -p "$REDIS_PORT" ping) != 'PONG' ]]; do
-          {{- end }}
-            echo "Node $nodeIP not ready, waiting for all the nodes to be ready..."
-            sleep 5
-          done
-          slave=()
-          if (( $REDIS_CLUSTER_REPLICAS >= 1 )) && (( newNodeCounter % (( $REDIS_CLUSTER_REPLICAS + 1 )) )); then
-            slave+=("--cluster-slave")
-          fi
-          {{- if .Values.tls.enabled }}
-          while ! redis-cli --cluster --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} add-node "${nodeIP}:${REDIS_TLS_PORT}" "{{ index .Values.cluster.externalAccess.service.loadBalancerIP 0 }}:${REDIS_TLS_PORT}" ${slave[@]}; do
-          {{- else }}
-          while ! redis-cli --cluster add-node "${nodeIP}:${REDIS_PORT}" "{{ index .Values.cluster.externalAccess.service.loadBalancerIP 0 }}:${REDIS_PORT}" ${slave[@]}; do
-          {{- end }}
-            echo "Add-node ${newNodeIndex} ${newNodeIP} failed, retrying"
-            sleep 5
-          done
-          ((newNodeCounter += 1))
-        done
-
-        {{- if .Values.tls.enabled }}
-        while ! redis-cli --cluster rebalance --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} "{{ index .Values.cluster.externalAccess.service.loadBalancerIP 0 }}:${REDIS_TLS_PORT}" --cluster-use-empty-masters; do
-        {{- else }}
-        while ! redis-cli --cluster rebalance "{{ index .Values.cluster.externalAccess.service.loadBalancerIP 0 }}:${REDIS_PORT}" --cluster-use-empty-masters; do
-        {{- end }}
-          echo "Rebalance failed, retrying"
-          sleep 5
-          {{- if .Values.tls.enabled }}
-          redis-cli --cluster fix --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} "{{ index .Values.cluster.externalAccess.service.loadBalancerIP 0 }}:${REDIS_TLS_PORT}"
-          {{- else }}
-          redis-cli --cluster fix "{{ index .Values.cluster.externalAccess.service.loadBalancerIP 0 }}:${REDIS_PORT}"
-          {{- end }}
-        done
-
-        {{- else }}
+        
         # number of currently deployed redis master nodes
         currentMasterNodesNum="$(( {{ .Values.cluster.update.currentNumberOfNodes }} / (( {{ .Values.cluster.update.currentNumberOfReplicas }} + 1 )) ))"
+        echo $currentMasterNodesNum
+
         # end postion of new replicas that should be assigned to original redis master nodes
         slaveNodesEndPos="$(( {{ .Values.cluster.update.currentNumberOfNodes }} + (($REDIS_CLUSTER_REPLICAS - {{ .Values.cluster.update.currentNumberOfReplicas }})) * $currentMasterNodesNum ))"
+        echo $slaveNodesEndPos
+
         for node in $(seq $((1+{{ .Values.cluster.update.currentNumberOfNodes }})) {{ .Values.cluster.nodes }}); do
           newNodeIndex="$(($node - 1))"
+
+          ## ready -- pong
           newNodeIP=$(wait_for_dns_lookup "{{ template "common.names.fullname" . }}-${newNodeIndex}.{{ template "common.names.fullname" . }}-headless" 120 5)
           {{- if .Values.tls.enabled }}
           while [[ $(redis-cli -h "$newNodeIP" -p "$REDIS_TLS_PORT" --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} ping) != 'PONG' ]]; do
@@ -130,6 +98,8 @@ spec:
             newNodeIP=$(wait_for_dns_lookup "{{ template "common.names.fullname" . }}-${newNodeIndex}.{{ template "common.names.fullname" . }}-headless" 120 5)
             sleep 5
           done
+          
+          ## command
           slave=()
           # when the index of the new node is less than `slaveNodesEndPos`，the added node is a replica that assigned to original redis master node
           # when the index of the new node is greater than or equal to `slaveNodesEndPos`，and it is not a multiple of `$REDIS_CLUSTER_REPLICAS + 1`, the added node is a replica that assigned to newly added master node
@@ -146,24 +116,13 @@ spec:
             firstNodeIP=$(wait_for_dns_lookup "{{ template "common.names.fullname" . }}-0.{{ template "common.names.fullname" . }}-headless" 120 5)
             newNodeIP=$(wait_for_dns_lookup "{{ template "common.names.fullname" . }}-${newNodeIndex}.{{ template "common.names.fullname" . }}-headless" 120 5)
           done
-        done
+        done 
+        # for done
 
-        {{- if .Values.tls.enabled }}
-        while ! redis-cli --cluster rebalance --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} "${firstNodeIP}:${REDIS_TLS_PORT}" --cluster-use-empty-masters; do
-        {{- else }}
-        while ! redis-cli --cluster rebalance "${firstNodeIP}:${REDIS_PORT}" --cluster-use-empty-masters; do
-        {{- end }}
-          echo "Rebalance failed, retrying"
-          sleep 5
-          firstNodeIP=$(wait_for_dns_lookup "{{ template "common.names.fullname" . }}-0.{{ template "common.names.fullname" . }}-headless" 120 5)
-          {{- if .Values.tls.enabled }}
-          redis-cli --cluster fix --tls --cert ${REDIS_TLS_CERT_FILE} --key ${REDIS_TLS_KEY_FILE} --cacert ${REDIS_TLS_CA_FILE} "${firstNodeIP}:${REDIS_TLS_PORT}"
-          {{- else }}
-          redis-cli --cluster fix "${firstNodeIP}:${REDIS_PORT}"
-          {{- end }}
-        done
+        # backup command
+        redis-cli --cluster "${firstNodeIP}:${REDIS_PORT}" bgsave
+        redis-cli --rdb "${firstNodeIP}:${REDIS_PORT}" 
 
-        {{- end }}
     {{- end }}
     env:
       - name: BITNAMI_DEBUG
