@@ -8,7 +8,6 @@ metadata:
     {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 2 }}
     {{- end }}
   annotations:
-    "helm.sh/hook": post-upgrade
     {{- if .Values.backupJob.annotations }}
     {{- include "common.tplvalues.render" ( dict "value" .Values.backupJob.annotations "context" $ ) | nindent 2 }}
     {{- end }}
