@@ -811,10 +811,10 @@ cluster:
     addNodes: false
     ## @param cluster.update.currentNumberOfNodes Number of currently deployed Redis&reg; nodes
     ##
-    currentNumberOfNodes: 6
+    currentNumberOfNodes: 3
     ## @param cluster.update.currentNumberOfReplicas Number of currently deployed Redis&reg; replicas
     ##
-    currentNumberOfReplicas: 1
+    currentNumberOfReplicas: 0
     ## @param cluster.update.newExternalIPs External IPs obtained from the services for the new nodes to add to the cluster
     ##
     newExternalIPs: []

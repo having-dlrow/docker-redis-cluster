@@ -65,6 +65,8 @@ spec:
     {{- else }}
     args:
       - |
+        ls -al /
+        ls -al /opt/bitnami
         . /opt/bitnami/scripts/libnet.sh
         . /opt/bitnami/scripts/libos.sh
         # Backwards compatibility change
