@@ -123,6 +123,7 @@ spec:
         redis-cli --cluster "${firstNodeIP}:${REDIS_PORT}" bgsave
         redis-cli --rdb "${firstNodeIP}:${REDIS_PORT}" 
 
+        {{- end }}
     {{- end }}
     env:
       - name: BITNAMI_DEBUG
