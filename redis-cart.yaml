@@ -19,7 +19,7 @@ global:
   ##   - myRegistryKeySecretName
   ##
   imagePullSecrets: []
-  storageClass: ""
+  storageClass: "ceph-rbd"
   redis:
     password: ""
 
@@ -316,7 +316,7 @@ persistence:
   ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
   ##   GKE, AWS & OpenStack)
   ##
-  storageClass: ""
+  storageClass: "ceph-rbd"
   ## @param persistence.annotations Persistent Volume Claim annotations
   ##
   annotations: {}
