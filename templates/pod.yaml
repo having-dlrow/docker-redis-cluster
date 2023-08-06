@@ -55,7 +55,7 @@ spec:
     {{- else if .Values.backupJob.command }}
     command: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.command "context" $) | nindent 4 }}
     {{- else }}
-    command: ['/bin/sh', '-c']
+    command: ['/bin/bash', '-c']
     {{- end }}
     {{- if .Values.diagnosticMode.enabled }}
     args: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.args "context" $) | nindent 4 }}

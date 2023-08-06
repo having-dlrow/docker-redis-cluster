@@ -9,7 +9,7 @@ COPY --from=bitnami /opt/bitnami /opt/bitnami
 RUN chmod g+rwX /opt/bitnami
 
 # Install required dependencies
-RUN apk add --no-cache curl unzip jq restic redis
+RUN apk add --no-cache bash curl unzip jq restic redis
 
 # Set variables for kubectl and RedisShake versions
 ENV KUBECTL_VERSION="latest"
