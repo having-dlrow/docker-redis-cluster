@@ -31,3 +31,5 @@ WORKDIR /backup
 # Copy necessary files
 COPY s3 /backup/s3
 COPY backup.bash env_vars.env /backup/
+
+ENTRYPOINT [ "tail", "-f", "/dev/null"]

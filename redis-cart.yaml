@@ -1081,7 +1081,9 @@ backupJob:
   ##  - name: BEARER_AUTH
   ##    value: true
   ##
-  extraEnvVars: []
+  extraEnvVars:
+    - name: FOO
+      value: "bar"
   ## @param backupJob.extraEnvVarsCM ConfigMap containing extra environment variables
   ##
   extraEnvVarsCM: ""
