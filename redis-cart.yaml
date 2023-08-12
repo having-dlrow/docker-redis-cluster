@@ -326,7 +326,7 @@ persistence:
     - ReadWriteOnce
   ## @param persistence.size Size of data volume
   ##
-  size: 8Gi
+  size: 16Gi
   ## @param persistence.matchLabels Persistent Volume selectors
   ## https://kubernetes.io/docs/concepts/storage/persistent-volumes/#selector
   ##
@@ -808,7 +808,7 @@ cluster:
     ## @param cluster.update.addNodes Boolean to specify if you want to add nodes after the upgrade
     ## Setting this to true a hook will add nodes to the Redis&reg; cluster after the upgrade. currentNumberOfNodes and currentNumberOfReplicas is required
     ##
-    addNodes: false
+    addNodes: true
     ## @param cluster.update.currentNumberOfNodes Number of currently deployed Redis&reg; nodes
     ##
     currentNumberOfNodes: 3
@@ -827,7 +827,7 @@ cluster:
 metrics:
   ## @param metrics.enabled Start a side-car prometheus exporter
   ##
-  enabled: false
+  enabled: true
   ## @param metrics.image.registry Redis&reg; exporter image registry
   ## @param metrics.image.repository Redis&reg; exporter image name
   ## @param metrics.image.tag Redis&reg; exporter image tag
@@ -1054,7 +1054,7 @@ sysctlImage:
 backupJob:
   enabled: false
   schedule: "00 * * * *"
-  image: ysyoo/redis-tool:3.7
+  image: ysyoo/redis-tool:3.1.11
   ## @param backupJob.activeDeadlineSeconds Number of seconds the Job to create the cluster will be waiting for the Nodes to be ready.
   ##
   command: []
@@ -1106,7 +1106,7 @@ backupJob:
 restoreJob:
   enabled: true
   schedule: "10 * * * *"
-  image: ysyoo/redis-tool:3.7
+  image: ysyoo/redis-tool:3.1.11
   ## @param restoreJob.activeDeadlineSeconds Number of seconds the Job to create the cluster will be waiting for the Nodes to be ready.
   ##
   command: []
