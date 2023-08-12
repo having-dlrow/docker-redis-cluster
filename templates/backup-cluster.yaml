@@ -1,0 +1,112 @@
+{{- if .Values.backupJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ template "common.names.fullname" . }}-backup
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  activeDeadlineSeconds: 3600
+  schedule: {{ .Values.backupJob.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          {{- if .Values.updateJob.affinity }}
+          affinity: {{- include "common.tplvalues.render" (dict "value" .Values.updateJob.affinity "context" $) | nindent 10 }}
+          {{- else }}
+          affinity:
+            podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.updateJob.podAffinityPreset "context" $) | nindent 12 }}
+            podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.updateJob.podAntiAffinityPreset "context" $) | nindent 12 }}
+            nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.updateJob.nodeAffinityPreset.type "key" .Values.updateJob.nodeAffinityPreset.key "values" .Values.updateJob.nodeAffinityPreset.values) | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: backup
+              image: {{ .Values.backupJob.image | quote }}
+              {{- if .Values.containerSecurityContext.enabled }}
+              securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 16 }}
+              {{- end }}
+              {{- if .Values.diagnosticMode.enabled }}
+              command: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.command "context" $) | nindent 14 }}
+              {{- else if .Values.backupJob.command }}
+              command: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.command "context" $) | nindent 14 }}
+              {{- else }}
+              command: ['/bin/bash', '-c']
+              {{- end }}
+              {{- if .Values.diagnosticMode.enabled }}
+              args: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.args "context" $) | nindent 14 }}
+              {{- else if .Values.backupJob.args }}
+              args: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.args "context" $) | nindent 14 }}
+              {{- else }}
+              args:
+                - |
+                  sleep 300
+              {{- end }}
+              env:
+                {{- if .Values.cluster.externalAccess.enabled }}
+                {{- if .Values.tls.enabled }}
+                - name:  REDIS_TLS_CERT_FILE
+                  value: {{ template "redis-cluster.tlsCert" . }}
+                - name:  REDIS_TLS_KEY_FILE
+                  value: {{ template "redis-cluster.tlsCertKey" . }}
+                - name:  REDIS_TLS_CA_FILE
+                  value: {{ template "redis-cluster.tlsCACert" . }}
+                - name: REDIS_TLS_PORT_NUMBER
+                {{- else }}
+                - name: REDIS_PORT_NUMBER
+                {{- end }}
+                  value: {{ .Values.cluster.externalAccess.service.port | quote }}
+                {{- else }}
+                {{- if .Values.tls.enabled }}
+                - name:  REDIS_TLS_CERT_FILE
+                  value: {{ template "redis-cluster.tlsCert" . }}
+                - name:  REDIS_TLS_KEY_FILE
+                  value: {{ template "redis-cluster.tlsCertKey" . }}
+                - name:  REDIS_TLS_CA_FILE
+                  value: {{ template "redis-cluster.tlsCACert" . }}
+                - name: REDIS_TLS_PORT_NUMBER
+                {{- else }}
+                - name: REDIS_PORT_NUMBER
+                {{- end }}
+                  value: {{ .Values.redis.containerPorts.redis | quote }}
+                {{- end }}
+                - name: REDIS_CLUSTER_REPLICAS
+                  value: {{ .Values.cluster.replicas | quote }}
+                {{- if .Values.usePassword }}
+                - name: REDISCLI_AUTH
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ template "redis-cluster.secretName" . }}
+                      key: {{ template "redis-cluster.secretPasswordKey" . }}
+                {{- end }}
+                {{- if .Values.backupJob.extraEnvVars }}
+                {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.extraEnvVars "context" $) | nindent 14 }}
+                {{- end }}
+              {{- if or .Values.backupJob.extraEnvVarsCM .Values.backupJob.extraEnvVarsSecret }}
+              envFrom:
+                {{- if .Values.backupJob.extraEnvVarsCM }}
+                - configMapRef:
+                    name: {{ include "common.tplvalues.render" (dict "value" .Values.backupJob.extraEnvVarsCM "context" $) }}
+                {{- end }}
+                {{- if .Values.backupJob.extraEnvVarsSecret }}
+                - secretRef:
+                    name: {{ include "common.tplvalues.render" (dict "value" .Values.backupJob.extraEnvVarsSecret "context" $) }}
+                {{- end }}
+              {{- end }}
+              {{- if .Values.backupJob.resources }}
+              resources: {{- toYaml .Values.backupJob.resources | nindent 16 }}
+              {{- end }}
+              {{- if or .Values.tls.enabled .Values.backupJob.extraVolumeMounts }}
+              volumeMounts:
+                {{- if .Values.tls.enabled }}
+                - name: redis-certificates
+                  mountPath: /opt/bitnami/redis/certs
+                  readOnly: true
+                {{- end }}
+                {{- if .Values.backupJob.extraVolumeMounts }}
+                {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.extraVolumeMounts "context" $) | nindent 14 }}
+                {{- end }}
+              {{- end }}
+          restartPolicy: OnFailure
+      ttlSecondsAfterFinished: 3600
+
+{{- end }}
