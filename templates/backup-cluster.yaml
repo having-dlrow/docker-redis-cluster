@@ -5,20 +5,12 @@ metadata:
   name: {{ template "common.names.fullname" . }}-backup
   namespace: {{ .Release.Namespace | quote }}
 spec:
-  activeDeadlineSeconds: 3600
+  startingDeadlineSeconds: 60
   schedule: {{ .Values.backupJob.schedule | quote }}
   jobTemplate:
     spec:
       template:
         spec:
-          {{- if .Values.updateJob.affinity }}
-          affinity: {{- include "common.tplvalues.render" (dict "value" .Values.updateJob.affinity "context" $) | nindent 10 }}
-          {{- else }}
-          affinity:
-            podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.updateJob.podAffinityPreset "context" $) | nindent 12 }}
-            podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.updateJob.podAntiAffinityPreset "context" $) | nindent 12 }}
-            nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.updateJob.nodeAffinityPreset.type "key" .Values.updateJob.nodeAffinityPreset.key "values" .Values.updateJob.nodeAffinityPreset.values) | nindent 12 }}
-          {{- end }}
           containers:
             - name: backup
               image: {{ .Values.backupJob.image | quote }}
@@ -26,29 +18,37 @@ spec:
               securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 16 }}
               {{- end }}
               {{- if .Values.diagnosticMode.enabled }}
-              command: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.command "context" $) | nindent 14 }}
+              command: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.command "context" $) | nindent 16 }}
               {{- else if .Values.backupJob.command }}
-              command: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.command "context" $) | nindent 14 }}
+              command: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.command "context" $) | nindent 16 }}
               {{- else }}
               command: ['/bin/bash', '-c']
               {{- end }}
               {{- if .Values.diagnosticMode.enabled }}
-              args: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.args "context" $) | nindent 14 }}
+              args: {{- include "common.tplvalues.render" (dict "value" .Values.diagnosticMode.args "context" $) | nindent 16 }}
               {{- else if .Values.backupJob.args }}
-              args: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.args "context" $) | nindent 14 }}
+              args: {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.args "context" $) | nindent 16 }}
               {{- else }}
               args:
                 - |
-                  sleep 300
+
+                  script_path="/workspace/redis-tool.sh"
+
+                  if [ -f "$script_path" ]; then
+                      bash "$script_path" backup
+                  else
+                      echo "Script does not exist: $script_path"
+                  fi
+                  sleep 60
               {{- end }}
               env:
                 {{- if .Values.cluster.externalAccess.enabled }}
                 {{- if .Values.tls.enabled }}
-                - name:  REDIS_TLS_CERT_FILE
+                - name: REDIS_TLS_CERT_FILE
                   value: {{ template "redis-cluster.tlsCert" . }}
-                - name:  REDIS_TLS_KEY_FILE
+                - name: REDIS_TLS_KEY_FILE
                   value: {{ template "redis-cluster.tlsCertKey" . }}
-                - name:  REDIS_TLS_CA_FILE
+                - name: REDIS_TLS_CA_FILE
                   value: {{ template "redis-cluster.tlsCACert" . }}
                 - name: REDIS_TLS_PORT_NUMBER
                 {{- else }}
@@ -57,11 +57,11 @@ spec:
                   value: {{ .Values.cluster.externalAccess.service.port | quote }}
                 {{- else }}
                 {{- if .Values.tls.enabled }}
-                - name:  REDIS_TLS_CERT_FILE
+                - name: REDIS_TLS_CERT_FILE
                   value: {{ template "redis-cluster.tlsCert" . }}
-                - name:  REDIS_TLS_KEY_FILE
+                - name: REDIS_TLS_KEY_FILE
                   value: {{ template "redis-cluster.tlsCertKey" . }}
-                - name:  REDIS_TLS_CA_FILE
+                - name: REDIS_TLS_CA_FILE
                   value: {{ template "redis-cluster.tlsCACert" . }}
                 - name: REDIS_TLS_PORT_NUMBER
                 {{- else }}
@@ -69,6 +69,12 @@ spec:
                 {{- end }}
                   value: {{ .Values.redis.containerPorts.redis | quote }}
                 {{- end }}
+                - name: REDIS_CLUSTER_NAME
+                  value: {{ template "common.names.fullname" . }}
+                - name: REDIS_CLUSTER_NAMESPACE
+                  value: {{ .Release.Namespace | quote }}
+                - name: CURRENT_MASTER_NODE_NUM
+                  value: {{ .Values.cluster.update.currentNumberOfNodes | quote }}
                 - name: REDIS_CLUSTER_REPLICAS
                   value: {{ .Values.cluster.replicas | quote }}
                 {{- if .Values.usePassword }}
@@ -79,7 +85,7 @@ spec:
                       key: {{ template "redis-cluster.secretPasswordKey" . }}
                 {{- end }}
                 {{- if .Values.backupJob.extraEnvVars }}
-                {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.extraEnvVars "context" $) | nindent 14 }}
+                {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.extraEnvVars "context" $) | nindent 16 }}
                 {{- end }}
               {{- if or .Values.backupJob.extraEnvVarsCM .Values.backupJob.extraEnvVarsSecret }}
               envFrom:
@@ -95,18 +101,19 @@ spec:
               {{- if .Values.backupJob.resources }}
               resources: {{- toYaml .Values.backupJob.resources | nindent 16 }}
               {{- end }}
-              {{- if or .Values.tls.enabled .Values.backupJob.extraVolumeMounts }}
               volumeMounts:
+              {{- if or .Values.tls.enabled .Values.backupJob.extraVolumeMounts }}
                 {{- if .Values.tls.enabled }}
                 - name: redis-certificates
                   mountPath: /opt/bitnami/redis/certs
                   readOnly: true
                 {{- end }}
                 {{- if .Values.backupJob.extraVolumeMounts }}
-                {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.extraVolumeMounts "context" $) | nindent 14 }}
+                {{- include "common.tplvalues.render" (dict "value" .Values.backupJob.extraVolumeMounts "context" $) | nindent 18 }}
                 {{- end }}
               {{- end }}
           restartPolicy: OnFailure
       ttlSecondsAfterFinished: 3600
-
+  successfulJobsHistoryLimit: 3  # completed history
+  failedJobsHistoryLimit: 1      # fail history
 {{- end }}
